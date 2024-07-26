@@ -1,0 +1,10 @@
+P: /devices/virtual/block/loop0
+N: loop0
+E: DEVNAME=/dev/loop0
+E: DEVPATH=/devices/virtual/block/loop0
+E: DEVTYPE=disk
+E: MAJOR=7
+E: MINOR=0
+E: SUBSYSTEM=block
+E: USEC_INITIALIZED=30198
+

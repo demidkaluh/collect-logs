@@ -1,0 +1,3 @@
+serial: 00000000, check flags: 0f
+serial: 00000000, check flags: 00
+M 00000000 <-> 00000000 [ MBR ]

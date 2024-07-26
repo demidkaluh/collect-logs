@@ -1,0 +1,3 @@
+NAME MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sr0   11:0    1 1024M  0 rom  
+sda    8:0    0  100M  0 disk /usr/lib/amdz-ng-gui/OUTPUT
