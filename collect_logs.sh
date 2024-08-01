@@ -11,7 +11,7 @@ function Collect_logs ()
       out+="$i "
     done
 
-    printf '\033[91m%s\033[0m' "$out"
+    printf "\033[91m"$out"\033[0m"
   }
 
 
@@ -23,7 +23,7 @@ function Collect_logs ()
       out+="$i "
     done
 
-    printf '\033[92m%s\033[0m' "$out"
+    printf "\033[92m""$out""\033[0m"
   }
 
 
@@ -77,18 +77,17 @@ function Collect_logs ()
     fi
   }
 
-  trap 'My_exit 1 && Red EXIT' EXIT
-  trap 'My_exit 1 && Red SIGINT' SIGINT
-  trap 'My_exit 1 && Red SIGTERM' SIGTERM
-  trap 'My_exit 1 && Red SIGHUP' SIGHUP
-  trap 'My_exit 1 && Red SIGQUIT' SIGQUIT
+  #trap 'My_exit 1 && Red EXIT' EXIT
+  #trap 'My_exit 1 && Red SIGINT' SIGINT
+  #trap 'My_exit 1 && Red SIGTERM' SIGTERM
+  #trap 'My_exit 1 && Red SIGHUP' SIGHUP
+  #trap 'My_exit 1 && Red SIGQUIT' SIGQUIT
   #trap 'My_exit 1 && Red ERR' ERR 
 
-  MACHINE=get-linux-info-v12-17.10.2023-5.10.144.efi
   #arch
   BIOS="/usr/share/edk2/x64/OVMF.4m.fd"
   #debian
-  BIOS="/usr/share/OVMF/OVMF_CODE_4M.fd"
+  #BIOS="/usr/share/OVMF/OVMF_CODE_4M.fd"
   RAM_SIZE=1000M
   SMP=2
   DISK_SIZE=100M
@@ -100,8 +99,8 @@ function Collect_logs ()
       check-logs [ARGS]
   Arguments:
       --help,-h,help    - show this help
-      -f (file)         - choose verifiable .efi file (default is get-linux-info-v12-17.10.2023-5.10.144.efi) 
-      -b (bios)         - choose bios version (default is /usr/share/edk2/x64/OVMF.4m.fd)
+      -f (file)         - choose verifiable .efi file 
+      -b (bios)         - choose bios version
       -m (memory)       - choose RAM size (default is 1000M)
       -s (smp)          - choose number of cores (default is 2)
       -d (disk)         - choose disk space (default is 100M)\n"
@@ -149,12 +148,12 @@ function Collect_logs ()
 
 
   #CREATING VFAT GPT DISK
-  dd if=/dev/zero of=disk.img bs="$DISK_SIZE" count=1 status=progress >> /dev/null 2>&1
+  dd if=/dev/zero of=disk.img bs="$DISK_SIZE" count=1 status=progress #>> /dev/null 2>&1
   #echo 'label: gpt' | sfdisk disk.img >> /dev/null 2>&1
   parted disk.img --script mklabel gpt #>> /dev/null 2>&1
   parted disk.img --script mkpart primary 0 100% #>> /dev/null 2>&1
   
-  mkfs.vfat disk.img >> /dev/null 2>&1
+  mkfs.vfat disk.img #>> /dev/null 2>&1
   
   mkdir -p disk
   mount -t vfat disk.img disk
@@ -195,11 +194,19 @@ function Collect_logs ()
   #UNZIPPING ARCHIVE IN "AMDZ_UNZIPPED_LOGS" DIRECTORY
   ARCHIVE=$(ls | sort | grep log___ | tail -n 1)
   mkdir -p ../../AMDZ_UNZIPPED_LOGS
-  tar xvf "$ARCHIVE" -C ../../AMDZ_UNZIPPED_LOGS 1> /dev/null
-  My_cd ../../AMDZ_UNZIPPED_LOGS
+  CURRENT_MACHINE_DIR="../../AMDZ_UNZIPPED_LOGS/""$MACHINE"
+  mkdir -p $CURRENT_MACHINE_DIR
+  tar xvf "$ARCHIVE" -C "$CURRENT_MACHINE_DIR" 1> /dev/null
+  My_cd ..
+  My_cd ..
+  My_cd AMDZ_UNZIPPED_LOGS
+  My_cd "$MACHINE"
+  
   UNZIPPED_DIR="$(ls -d */ | sort | grep log___ | tail -n 1)"
+  mkdir "$UNZIPPED_DIR"
   My_cd "$UNZIPPED_DIR"
-
+  pwd 
+  exit
 
   #LOGS TO FIND
   LOGS=(blkid.list boot_files.list cmdline.log dmesg.log dmidecode.list \
@@ -253,7 +260,7 @@ function Collect_logs ()
 
 
   #UNMOUNT AND REMOVE DISK
-  My_cd ../../
+  My_cd ../../../
   Remove   
 }
 
