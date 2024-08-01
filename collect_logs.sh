@@ -85,7 +85,10 @@ function Collect_logs ()
   #trap 'My_exit 1 && Red ERR' ERR 
 
   MACHINE=get-linux-info-v12-17.10.2023-5.10.144.efi
-  BIOS=/usr/share/edk2/x64/OVMF.4m.fd
+  #arch
+  BIOS="/usr/share/edk2/x64/OVMF.4m.fd"
+  #debian
+  BIOS="/usr/share/OVMF/OVMF_CODE_4M.fd"
   RAM_SIZE=1000M
   SMP=2
   DISK_SIZE=100M
