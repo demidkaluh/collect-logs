@@ -1,9 +1,8 @@
 #!/bin/bash
-trap clear SIGINT
+
 
 function Collect_logs ()
 {
-
   function Red ()
   {
     out=""
@@ -30,9 +29,9 @@ function Collect_logs ()
 
   function Remove ()
   {
-    umount disk.img
-    rm -r disk
-    rm disk.img
+    umount -q disk.img
+    rm -r -f disk
+    rm -f disk.img
   }
 
 
@@ -78,6 +77,12 @@ function Collect_logs ()
     fi
   }
 
+  trap 'My_exit 1 && Red EXIT' EXIT
+  trap 'My_exit 1 && Red SIGINT' SIGINT
+  trap 'My_exit 1 && Red SIGTERM' SIGTERM
+  trap 'My_exit 1 && Red SIGHUP' SIGHUP
+  trap 'My_exit 1 && Red SIGQUIT' SIGQUIT
+  #trap 'My_exit 1 && Red ERR' ERR 
 
   MACHINE=get-linux-info-v12-17.10.2023-5.10.144.efi
   BIOS=/usr/share/edk2/x64/OVMF.4m.fd
@@ -157,24 +162,24 @@ function Collect_logs ()
   mkdir -p EFI/BOOT
   My_cd ..
   cp $MACHINE disk/EFI/BOOT/BOOTX64.efi
-  umount disk.img
+  umount -q disk.img
 
   printf "QEMU starts\r"
   sleep 1
   printf "Log collection starts. Please wait...\r"
   
   #QEMU BOOT
-  qemu-system-x86_64 \
-    -bios "$BIOS"    \
-    -hda disk.img    \
-    -m "$RAM_SIZE"   \
-    -smp "$SMP"      \
-    --enable-kvm     \
-    -usb             \
-    -nographic       \
-    -serial none     \
-    -monitor none    \
-    -vga qxl
+  qemu-system-x86_64        \
+    -bios "$BIOS"            \
+    -hda disk.img, format=raw \
+    -m "$RAM_SIZE"             \
+    -smp "$SMP"                 \
+    --enable-kvm                 \
+    -usb                          \
+    -nographic                     \
+    -serial none                    \
+    -monitor none                    \
+    -vga qxl  
     #>> /dev/null 2>&1
 
   mount -t vfat disk.img disk
