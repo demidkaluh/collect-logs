@@ -1,9 +1,9 @@
 #!/bin/bash
 
 
-function Collect_logs ()
+function collect-logs ()
 {
-  function Red ()
+  function RED ()
   {
     out=""
     for i in "$@"
@@ -15,7 +15,7 @@ function Collect_logs ()
   }
 
 
-  function Green ()
+  function GREEN ()
   {
     out=""
     for i in "$@"
@@ -27,7 +27,7 @@ function Collect_logs ()
   }
 
 
-  function Remove ()
+  function remove ()
   {
     umount -q disk.img
     rm -r -f disk
@@ -39,7 +39,7 @@ function Collect_logs ()
   DEPTH=0
 
   #Secure exit
-  function My_exit ()
+  function my_exit ()
   {
     EXIT_CODE="$1"
     if [[ "$DEPTH" -gt 0 ]]; then
@@ -48,15 +48,17 @@ function Collect_logs ()
       done
     fi
 
-    Remove
+    remove
     exit "$EXIT_CODE" 
   }        
 
 
   #Secure cd
-  function My_cd ()
+  function my_cd ()
   {
     cd "$1" 2>/dev/null
+
+    LEN=($(echo "$1" | grep -o "/" | wc -l))
 
     if [[ "$?" == 0 ]]; then
       if [[ "$1" == ".." ]]; then
@@ -68,14 +70,24 @@ function Collect_logs ()
     fi
 
     if [[ "$DEPTH" -lt 0 ]]; then
-      Red "Climbing to a higher directory is not allowed\n"
+      RED "Climbing to a higher directory is not allowed\n"
       My_exit 1 
     fi 
     else
-      Red "Error:directory ""$1"" doesn't exist or not available\n";
+      RED "Error:directory ""$1"" doesn't exist or not available\n";
       My_exit 1;
     fi
   }
+
+  #Outputs all files under current directory
+  function recursive_ls ()
+  {
+    for file in `find "$1" -type f -name "*"`
+    do
+      printf "$file \n"
+    done
+  }
+
 
   #trap 'My_exit 1 && Red EXIT' EXIT
   #trap 'My_exit 1 && Red SIGINT' SIGINT
@@ -85,9 +97,9 @@ function Collect_logs ()
   #trap 'My_exit 1 && Red ERR' ERR 
 
   #arch
-  BIOS="/usr/share/edk2/x64/OVMF.4m.fd"
+  #BIOS="/usr/share/edk2/x64/OVMF.4m.fd"
   #debian
-  #BIOS="/usr/share/OVMF/OVMF_CODE_4M.fd"
+  BIOS="/usr/share/OVMF/OVMF_CODE_4M.fd"
   RAM_SIZE=1000M
   SMP=2
   DISK_SIZE=100M
@@ -148,47 +160,48 @@ function Collect_logs ()
 
 
   #CREATING VFAT GPT DISK
-  dd if=/dev/zero of=disk.img bs="$DISK_SIZE" count=1 status=progress #>> /dev/null 2>&1
+  dd if=/dev/zero of=disk.img bs="$DISK_SIZE" count=1 status=progress >> /dev/null 2>&1
   #echo 'label: gpt' | sfdisk disk.img >> /dev/null 2>&1
   parted disk.img --script mklabel gpt #>> /dev/null 2>&1
   parted disk.img --script mkpart primary 0 100% #>> /dev/null 2>&1
   
-  mkfs.vfat disk.img #>> /dev/null 2>&1
+  mkfs.vfat disk.img >> /dev/null 2>&1
   
   mkdir -p disk
   mount -t vfat disk.img disk
   
-  My_cd disk
+  my_cd disk
+  pwd
   mkdir -p AMDZ_HW_LOG
   mkdir -p EFI
   mkdir -p EFI/BOOT
-  My_cd ..
+  my_cd ..
   cp $MACHINE disk/EFI/BOOT/BOOTX64.efi
   umount -q disk.img
 
   printf "QEMU starts\r"
-  sleep 1
   printf "Log collection starts. Please wait...\r"
   
+  
   #QEMU BOOT
-  qemu-system-x86_64        \
-    -bios "$BIOS"            \
-    -hda disk.img, format=raw \
-    -m "$RAM_SIZE"             \
-    -smp "$SMP"                 \
-    --enable-kvm                 \
-    -usb                          \
+  qemu-system-x86_64               \
+    -bios "$BIOS"                  \
+    -drive file=disk.img,format=raw\
+    -m "$RAM_SIZE"                 \
+    -smp "$SMP"                    \
+    --enable-kvm                   \
+    -usb                           \
     -nographic                     \
-    -serial none                    \
-    -monitor none                    \
+    -serial none                   \
+    -monitor none                  \
     -vga qxl  
-    #>> /dev/null 2>&1
+
 
   mount -t vfat disk.img disk
 
 
-  My_cd disk
-  My_cd AMDZ_HW_LOG
+  my_cd disk
+  my_cd AMDZ_HW_LOG
 
 
   #UNZIPPING ARCHIVE IN "AMDZ_UNZIPPED_LOGS" DIRECTORY
@@ -197,72 +210,150 @@ function Collect_logs ()
   CURRENT_MACHINE_DIR="../../AMDZ_UNZIPPED_LOGS/""$MACHINE"
   mkdir -p $CURRENT_MACHINE_DIR
   tar xvf "$ARCHIVE" -C "$CURRENT_MACHINE_DIR" 1> /dev/null
-  My_cd ..
-  My_cd ..
-  My_cd AMDZ_UNZIPPED_LOGS
-  My_cd "$MACHINE"
+  my_cd ..
+  my_cd ..
+  my_cd AMDZ_UNZIPPED_LOGS
+  my_cd "$MACHINE"
   
   UNZIPPED_DIR="$(ls -d */ | sort | grep log___ | tail -n 1)"
   mkdir "$UNZIPPED_DIR"
-  My_cd "$UNZIPPED_DIR"
+  my_cd "$UNZIPPED_DIR"
   pwd 
   exit
 
   #LOGS TO FIND
-  LOGS=(blkid.list boot_files.list cmdline.log dmesg.log dmidecode.list \
+  CHECK_LIST=(blkid.list boot_files.list cmdline.log dmesg.log dmidecode.list \
     dmi-raw-sysfs.bin drivers.log fdisk.log fstab.list grub.cfg/@boot@grub@grub.cfg \
     hwinfo.log hw.log iomem.log ioports.log kernel_config.log lsblk.log lsb.log \
     lsmod.log lspci.log lspcit.log lspcix.log mounts.log pcsc.log udevblock/nvme0n1.log \
     udevblock/nvme0n1p1.log  udevblock/nvme0n1p2.log  udevblock/nvme0n1p3.log  \
     udevblock/nvme0n1p4.log uname.log usb.log usbt.log version.log)
 
-
+  
+  LOGS=($(Recursive_ls "$UNZIPPED_DIR"))
+  OK_FILES=()
   NOT_EXISTING_FILES=()
   EMPTY_FILES=()
+  UNEXPECTED_FILES=()
+  
 
+  #Regular expr of array using for find
+  function reg_expr ()
+  {
+    
+    ARR=($1)
+    REG_EXP=($(printf '%s|' "${ARR[@]}")) 
+    LEN=${#REG_EXP}
+    let LEN-=1
+    REG_EXP=($(echo "$REG_EXP" | cut -c -"$LEN"))
+    REG_EXP='^('"$REG_EXP"')$'
+  }
+      
 
-  printf "\n           Logs integrity check:"
-  printf "$PIPE"
-  for FILE in "${LOGS[@]}"
+  #Find out if there are any not-found files
+  for FILE in "${CHECK_LIST[@]}"
   do
-    if [[ -s "$FILE" ]]; then
-      printf "File ""$(Green "$FILE")"" exists and not empty\n"
-    elif [[ -f "$FILE" ]] && [[ ! -s "$FILE" ]]; then
-      EMPTY_FILES+=("$FILE")
-      printf "File ""$(Red "$FILE")"" is empty\n"
+    if [[ "$FILE" =~ ($(reg_expr "${LOGS[@]}")) ]]; then
+      :
     else
-      NOT_EXISTING_FILES+=("$FILE")
-      printf "File ""$(Red "$FILE")"" not exists\n"
+      NOT_FOUND_FILES+=("$FILE")
+      #printf "File ""$(RED "$FILE")"" not exists\n"
     fi 
   done
+
+  #Sort successed, empty and unexpected files
+  for FILE in "${LOGS[@]}"
+  do
+    if [[ "$FILE" =~ ($(reg_expr "${CHECK_LIST[@]}")) ]]; then
+      if [[ -s "$FILE" ]]; then
+        OK_FILES+=("$FILE")
+        #printf "File ""$(GREEN "$FILE")"" exists and not empty\n"
+      else
+        EMPTY_FILES+=("$FILE")
+        #printf "File ""$(RED "$FILE")"" is empty\n"
+      fi
+    else
+      UNEXPECTED_FILES+=("$FILE")
+    fi
+  done
+
+  #Output results
+  printf "\n           LOG COLLECTION RESULTS:"
   printf "$PIPE"
 
+  CL_LEN="${#CHECK_LIST[@]}"
+  OK_LEN="${#OK_FILES[@]}"
+  NEF_LEN="${#NOT_FOUND_FILES[@]}"
+  EMP_LEN="${#EMPTY_FILES[@]}"
+  UNEXP_LEN="${UNEXPECTED_FILES[@]}"
+  
+  let FOUND_LEN=$OK_LEN+$EMP_LEN
+  
+  if [ "$OK_LEN" != 0 ]; then
+    GREEN "\nSUCCESSFUL ($OK_LEN file(s)):\n"
 
-  LOGS_LEN="${#LOGS[@]}"
-  NEF_LEN="${#NOT_EXISTING_FILES[@]}"
-  EMPTY_LEN="${#EMPTY_FILES[@]}"
+    for FILE in "${OK_FILES[@]}"
+    do 
+      printf "File "
+      GREEN "$FILE"
+      printf " exists and not empty\n"
+    done
+  fi
+
+  if [[ "$NEF_LEN" != 0 ]] || [[ "$EMP_LEN" != 0 ]]; then
+    RED \
+    "#############
+     # BAD FILES:#
+     #############\n"
+  fi
+  
+  if [ "$NEF_LEN" != 0 ]; then
+    RED "\nNOT FOUND ($NEF_LEN file(s)):\n"
+
+    for FILE in "${NOT_EXISTING_FILES[@]}"
+    do 
+      printf "File "
+      RED "$FILE"
+      printf " not found\n"
+    done
+  fi
+
+  if [ "$EMP_LEN" != 0 ]; then
+    RED "\nEMPTY ($EMP_LEN file(s)):\n"
+
+    for FILE in "${EMPTY_FILES[@]}"
+    do 
+      printf "File "
+      RED "$FILE"
+      printf " is empty\n"
+    done
+  fi
+
+  if [ "$UNEXP_LEN" != 0 ]; then
+    RED "\nUNEXPECTED ($UNEXP_LEN file(s)):\n"
+
+    for FILE in "${UNEXP_FILES[@]}"
+    do 
+      printf "File "
+      RED "$FILE"
+      printf " is unexpected\n"
+    done
+  fi
+    
+  printf "$PIPE"
 
   printf \
-  "$(("$LOGS_LEN" - "$NEF_LEN")) of $LOGS_LEN files were found, 
-  $(("$LOGS_LEN" - "$NEF_LEN" - "$EMPTY_LEN")) of them are not empty.\n"
-
-  if [[ "$NEF_LEN" != 0 ]] || [[ "$EMPTY_LEN" != 0 ]]; then
-    Red "BAD FILES:\n"
-  fi
-
-  if [ "$NEF_LEN" != 0 ]; then
-    printf "File(s) $(Red "${NOT_EXISTING_FILES[@]}") not found.\n"
-  fi
-
-  if [ "$EMPTY_LEN" != 0 ]; then
-    printf "Empty file(s): $(Red "${EMPTY_FILES[@]}")\n"
-  fi
-
+  "Totally were found "$LOGS_LEN" file(s).
+  $FOUND_LEN of $CL_LEN needed files were found.
+  $OK_LEN of them are empty.
+  $NEF_LEN file(s) not found.
+  $UNEXP_LEN unexpected file(s) were found.\n"
 
   #UNMOUNT AND REMOVE DISK
-  My_cd ../../../
-  Remove   
+  my_cd ../../../
+  remove   
+
 }
 
-Collect_logs "$@"
+collect-logs "$@"
 
