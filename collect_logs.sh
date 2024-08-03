@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 function collect-logs ()
 {
   function RED ()
@@ -33,7 +32,12 @@ function collect-logs ()
     rm -r -f disk
     rm -f disk.img
   }
+  
 
+  function my_pwd ()
+  {
+    pwd | sed 's/"/home/demid/Desktop/task"//'
+  }
 
   #How deep pwd from starting directory 
   DEPTH=0
@@ -88,7 +92,7 @@ function collect-logs ()
     done
   }
 
-
+  
   #trap 'My_exit 1 && Red EXIT' EXIT
   #trap 'My_exit 1 && Red SIGINT' SIGINT
   #trap 'My_exit 1 && Red SIGTERM' SIGTERM
@@ -97,9 +101,9 @@ function collect-logs ()
   #trap 'My_exit 1 && Red ERR' ERR 
 
   #arch
-  #BIOS="/usr/share/edk2/x64/OVMF.4m.fd"
+  BIOS="/usr/share/edk2/x64/OVMF.4m.fd"
   #debian
-  BIOS="/usr/share/OVMF/OVMF_CODE_4M.fd"
+  #BIOS="/usr/share/OVMF/OVMF_CODE_4M.fd"
   RAM_SIZE=1000M
   SMP=2
   DISK_SIZE=100M
@@ -108,14 +112,20 @@ function collect-logs ()
   USAGE="
   Runs QEMU with .efi app, collects logs and checks them.
   Usage (as root!):
-      check-logs [ARGS]
+      # bash collect-logs [ARGS]
   Arguments:
       --help,-h,help    - show this help
-      -f (file)         - choose verifiable .efi file 
-      -b (bios)         - choose bios version
-      -m (memory)       - choose RAM size (default is 1000M)
-      -s (smp)          - choose number of cores (default is 2)
-      -d (disk)         - choose disk space (default is 100M)\n"
+      -f                - choose verifiable .efi file 
+      -b                - choose bios version
+      -m (optional)     - choose RAM size (default is 1000M)
+      -s (optional)     - choose number of cores (default is 2)
+      -d (optional)     - choose disk space (default is 100M)
+
+      Minimum required (may differ with package managers): 
+      qemu or qemu-kvm 
+      libvirt 
+      kpartx 
+      dosfstools \n"
 
   PIPE="\n################################################\n"
 
@@ -168,10 +178,10 @@ function collect-logs ()
   mkfs.vfat disk.img >> /dev/null 2>&1
   
   mkdir -p disk
+  chown -R root disk
   mount -t vfat disk.img disk
   
   my_cd disk
-  pwd
   mkdir -p AMDZ_HW_LOG
   mkdir -p EFI
   mkdir -p EFI/BOOT
@@ -200,26 +210,23 @@ function collect-logs ()
   mount -t vfat disk.img disk
 
 
-  my_cd disk
-  my_cd AMDZ_HW_LOG
+  #UNZIPPING ARCHIVE IN "AMDZ_UNZIPPED_LOGS/MACHINE_NAME/TEST+DATE+MACHINE_NAME/" DIRECTORY
+  ARCHIVE="$(ls "disk/AMDZ_HW_LOG" | sort | grep log___ | tail -n 1)"
+  ARCHIVE_DIR="disk/AMDZ_HW_LOG""$ARCHIVE"
 
+  mkdir -p "AMDZ_UNZIPPED_LOGS"
+  CURRENT_MACHINE_DIR=$(echo "AMDZ_UNZIPPED_LOGS/""$MACHINE" | sed 's/.efi//')
+  mkdir -p "$CURRENT_MACHINE_DIR"
+  TEST_NAME="test""$(date +"%Y-%m-%d_%H_%M_%S")_""$CURRENT_MACHINE_DIR"
+  CURRENT_TEST_DIR="$CURRENT_MACHINE_DIR/""$TEST_NAME/"  
+  mkdir "$CURRENT_TEST_DIR" | { RED "$TEST_NAME already exists\n"; Remove; }
+  tar xvf "$ARCHIVE" -C "$CURRENT_TEST_DIR" 1> /dev/null
 
-  #UNZIPPING ARCHIVE IN "AMDZ_UNZIPPED_LOGS" DIRECTORY
-  ARCHIVE=$(ls | sort | grep log___ | tail -n 1)
-  mkdir -p ../../AMDZ_UNZIPPED_LOGS
-  CURRENT_MACHINE_DIR="../../AMDZ_UNZIPPED_LOGS/""$MACHINE"
-  mkdir -p $CURRENT_MACHINE_DIR
-  tar xvf "$ARCHIVE" -C "$CURRENT_MACHINE_DIR" 1> /dev/null
-  my_cd ..
-  my_cd ..
-  my_cd AMDZ_UNZIPPED_LOGS
-  my_cd "$MACHINE"
-  
-  UNZIPPED_DIR="$(ls -d */ | sort | grep log___ | tail -n 1)"
+  my_cd "$CURRENT_TEST_DIR"
+  UNZIPPED_DIR=$(echo "$ARCHIVE" | sed 's/.tar.xvf//')
   mkdir "$UNZIPPED_DIR"
   my_cd "$UNZIPPED_DIR"
-  pwd 
-  exit
+  
 
   #LOGS TO FIND
   CHECK_LIST=(blkid.list boot_files.list cmdline.log dmesg.log dmidecode.list \
@@ -350,9 +357,9 @@ function collect-logs ()
   $UNEXP_LEN unexpected file(s) were found.\n"
 
   #UNMOUNT AND REMOVE DISK
-  my_cd ../../../
+  #chown -R demid:users "AMDZ_UNZIPPED_LOGS"
   remove   
-
+  
 }
 
 collect-logs "$@"
