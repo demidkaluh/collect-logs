@@ -2,6 +2,8 @@
 
 function collect-logs ()
 {
+  START=$(pwd)
+
   function RED ()
   {
     out=""
@@ -10,9 +12,9 @@ function collect-logs ()
       out+="$i "
     done
 
-    printf "\033[91m"$out"\033[0m"
+    printf "\033[91m""$out""\033[0m"
   }
-
+  
 
   function GREEN ()
   {
@@ -25,62 +27,28 @@ function collect-logs ()
     printf "\033[92m""$out""\033[0m"
   }
 
-
+  
   function remove ()
   {
-    umount -q disk.img
-    rm -r -f disk
+    umount -q -f disk.img
+    rm -rf disk
     rm -f disk.img
   }
   
 
-  function my_pwd ()
-  {
-    pwd | sed 's/"/home/demid/Desktop/task"//'
-  }
-
-  #How deep pwd from starting directory 
-  DEPTH=0
-
   #Secure exit
   function my_exit ()
   {
-    EXIT_CODE="$1"
-    if [[ "$DEPTH" -gt 0 ]]; then
-      for ((i=0;i<"$DEPTH";i++)); do 
-        cd ..
-      done
-    fi
-
+    cd "$START" 
     remove
-    exit "$EXIT_CODE" 
+    exit "$1"
   }        
 
 
   #Secure cd
   function my_cd ()
   {
-    cd "$1" 2>/dev/null
-
-    LEN=($(echo "$1" | grep -o "/" | wc -l))
-
-    if [[ "$?" == 0 ]]; then
-      if [[ "$1" == ".." ]]; then
-        let DEPTH-=1 
-      elif [[ "$1" == "." ]]; then
-        let DEPTH-=0
-      else
-        let DEPTH+=1
-    fi
-
-    if [[ "$DEPTH" -lt 0 ]]; then
-      RED "Climbing to a higher directory is not allowed\n"
-      My_exit 1 
-    fi 
-    else
-      RED "Error:directory ""$1"" doesn't exist or not available\n";
-      My_exit 1;
-    fi
+    cd "$1" || { RED "Dir ""$1"" doesn't exist or not allowed\n"; my_exit 1; }
   }
 
   #Outputs all files under current directory
@@ -91,14 +59,29 @@ function collect-logs ()
       printf "$file \n"
     done
   }
-
   
-  #trap 'My_exit 1 && Red EXIT' EXIT
-  #trap 'My_exit 1 && Red SIGINT' SIGINT
-  #trap 'My_exit 1 && Red SIGTERM' SIGTERM
-  #trap 'My_exit 1 && Red SIGHUP' SIGHUP
-  #trap 'My_exit 1 && Red SIGQUIT' SIGQUIT
-  #trap 'My_exit 1 && Red ERR' ERR 
+
+  function signal_exit ()
+  {
+    printf "\nLog collection was interrupted\n"
+    my_exit 0
+  }
+  trap signal_exit SIGHUP SIGINT SIGQUIT SIGTERM
+  
+
+  function signal_stop ()
+  {
+    printf "\nLog collection was stopeed\n"
+  }
+  trap signal_stop SIGSTOP 
+
+
+  function signal_continue ()
+  {
+    "\nLog collection was continued\n"
+  }
+  trap signal_continue SIGCONT  
+  
 
   #arch
   BIOS="/usr/share/edk2/x64/OVMF.4m.fd"
@@ -172,24 +155,24 @@ function collect-logs ()
   #CREATING VFAT GPT DISK
   dd if=/dev/zero of=disk.img bs="$DISK_SIZE" count=1 status=progress >> /dev/null 2>&1
   #echo 'label: gpt' | sfdisk disk.img >> /dev/null 2>&1
-  parted disk.img --script mklabel gpt #>> /dev/null 2>&1
-  parted disk.img --script mkpart primary 0 100% #>> /dev/null 2>&1
+  parted disk.img --script mklabel gpt >> /dev/null 2>&1
+  parted disk.img --script mkpart primary 0 100% >> /dev/null 2>&1
   
   mkfs.vfat disk.img >> /dev/null 2>&1
   
   mkdir -p disk
-  chown -R root disk
   mount -t vfat disk.img disk
   
+
   my_cd disk
   mkdir -p AMDZ_HW_LOG
   mkdir -p EFI
   mkdir -p EFI/BOOT
+
   my_cd ..
   cp $MACHINE disk/EFI/BOOT/BOOTX64.efi
   umount -q disk.img
 
-  printf "QEMU starts\r"
   printf "Log collection starts. Please wait...\r"
   
   
@@ -201,33 +184,37 @@ function collect-logs ()
     -smp "$SMP"                    \
     --enable-kvm                   \
     -usb                           \
+    -no-reboot                     \
+    -d int                         \
     -nographic                     \
     -serial none                   \
     -monitor none                  \
-    -vga qxl  
-
-
+    2>/dev/null
+  
+  printf "\n"
   mount -t vfat disk.img disk
+  ls disk/AMDZ_HW_LOG
 
-
-  #UNZIPPING ARCHIVE IN "AMDZ_UNZIPPED_LOGS/MACHINE_NAME/TEST+DATE+MACHINE_NAME/" DIRECTORY
-  ARCHIVE="$(ls "disk/AMDZ_HW_LOG" | sort | grep log___ | tail -n 1)"
-  ARCHIVE_DIR="disk/AMDZ_HW_LOG""$ARCHIVE"
+  #UNZIPPING ARCHIVE IN "AMDZ_UNZIPPED_LOGS/MACHINE_NAME/TEST+DATE/" DIRECTORY
+  ARCHIVE="$(ls "disk/AMDZ_HW_LOG" | sort | grep log___ | grep .tar.xvf | tail -n 1)"
+  ARCHIVE_PATH="disk/AMDZ_HW_LOG""$ARCHIVE"
 
   mkdir -p "AMDZ_UNZIPPED_LOGS"
   CURRENT_MACHINE_DIR=$(echo "AMDZ_UNZIPPED_LOGS/""$MACHINE" | sed 's/.efi//')
   mkdir -p "$CURRENT_MACHINE_DIR"
-  TEST_NAME="test""$(date +"%Y-%m-%d_%H_%M_%S")_""$CURRENT_MACHINE_DIR"
-  CURRENT_TEST_DIR="$CURRENT_MACHINE_DIR/""$TEST_NAME/"  
-  mkdir "$CURRENT_TEST_DIR" | { RED "$TEST_NAME already exists\n"; Remove; }
-  tar xvf "$ARCHIVE" -C "$CURRENT_TEST_DIR" 1> /dev/null
 
+  TEST_NAME=$(echo "$ARCHIVE" | sed 's/log___/test/')
+  CURRENT_TEST_DIR="$CURRENT_MACHINE_DIR/""$TEST_NAME/"  
+  mkdir "$CURRENT_TEST_DIR" || { RED "$TEST_NAME already exists\n"; my_exit 1; }
+  mv "$ARCHIVE_PATH" "$CURRENT_TEST_DIR"
+  
   my_cd "$CURRENT_TEST_DIR"
+  tar xvf "$ARCHIVE" 1> /dev/null
+
   UNZIPPED_DIR=$(echo "$ARCHIVE" | sed 's/.tar.xvf//')
-  mkdir "$UNZIPPED_DIR"
   my_cd "$UNZIPPED_DIR"
   
-
+  
   #LOGS TO FIND
   CHECK_LIST=(blkid.list boot_files.list cmdline.log dmesg.log dmidecode.list \
     dmi-raw-sysfs.bin drivers.log fdisk.log fstab.list grub.cfg/@boot@grub@grub.cfg \
@@ -247,7 +234,6 @@ function collect-logs ()
   #Regular expr of array using for find
   function reg_expr ()
   {
-    
     ARR=($1)
     REG_EXP=($(printf '%s|' "${ARR[@]}")) 
     LEN=${#REG_EXP}
@@ -297,7 +283,7 @@ function collect-logs ()
   let FOUND_LEN=$OK_LEN+$EMP_LEN
   
   if [ "$OK_LEN" != 0 ]; then
-    GREEN "\nSUCCESSFUL ($OK_LEN file(s)):\n"
+    #GREEN "\nSUCCESSFUL ($OK_LEN file(s)):\n"
 
     for FILE in "${OK_FILES[@]}"
     do 
@@ -315,7 +301,7 @@ function collect-logs ()
   fi
   
   if [ "$NEF_LEN" != 0 ]; then
-    RED "\nNOT FOUND ($NEF_LEN file(s)):\n"
+    #RED "\nNOT FOUND ($NEF_LEN file(s)):\n"
 
     for FILE in "${NOT_EXISTING_FILES[@]}"
     do 
@@ -326,7 +312,7 @@ function collect-logs ()
   fi
 
   if [ "$EMP_LEN" != 0 ]; then
-    RED "\nEMPTY ($EMP_LEN file(s)):\n"
+    #RED "\nEMPTY ($EMP_LEN file(s)):\n"
 
     for FILE in "${EMPTY_FILES[@]}"
     do 
@@ -337,7 +323,7 @@ function collect-logs ()
   fi
 
   if [ "$UNEXP_LEN" != 0 ]; then
-    RED "\nUNEXPECTED ($UNEXP_LEN file(s)):\n"
+    #RED "\nUNEXPECTED ($UNEXP_LEN file(s)):\n"
 
     for FILE in "${UNEXP_FILES[@]}"
     do 
@@ -357,9 +343,9 @@ function collect-logs ()
   $UNEXP_LEN unexpected file(s) were found.\n"
 
   #UNMOUNT AND REMOVE DISK
-  #chown -R demid:users "AMDZ_UNZIPPED_LOGS"
-  remove   
-  
+  sudo chown -R demid:users AMDZ_UNZIPPED_LOGS
+  printf "Program completed\n"
+  my_exit 0 2>/dev/null
 }
 
 collect-logs "$@"
