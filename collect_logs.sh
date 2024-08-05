@@ -10,15 +10,16 @@ function collect-logs ()
       -f              - choose verifiable .efi file 
       Optional :
       --help,-h,help  - show this help
-      -c              - enable color output (0 or 1)
-      -b              - choose bios version (.../OVMF.4m.fd)
-      -m              - choose RAM size (default is 1000M)
-      -s              - choose number of cores (default is 2)
-      -d              - choose disk space (default is 200M)
+      -c              - enable color output (default 0)
+      -b              - send bios (.../OVMF.4m.fd)
+      -m              - choose RAM size (default 1000M)
+      -s              - choose number of cores (default 2)
+      -d              - choose disk space (default 200M)
 
       Minimum required (may differ with package managers): 
       qemu or qemu-kvm 
-      libvirt 
+      libvirt
+      ovmf 
       kpartx 
       dosfstools \n"
 
@@ -127,19 +128,6 @@ function collect-logs ()
   trap signal_exit SIGHUP SIGINT SIGQUIT SIGTERM
   
 
-  function signal_stop ()
-  {
-    printf "\nLog collection was stopeed\n"
-  }
-  trap signal_stop SIGSTOP 
-
-
-  function signal_continue ()
-  {
-    "\nLog collection was continued\n"
-  }
-  trap signal_continue SIGCONT  
-  
    
   RAM_SIZE=1000M
   SMP=2
@@ -337,15 +325,15 @@ function collect-logs ()
   
   LOGS=($(recursive_ls .))
   OK_FILES=()
-  NOT_EXISTING_FILES=()
   EMPTY_FILES=()
   UNEXPECTED_FILES=()
+  NOT_FOUND_FILES=()
   
   
   #finds substring in string
   function my_find ()
   {
-    ARRAY=($@)
+    ARRAY="($@)"
     let ARR_LEN="${#ARRAY[@]}"-1
     ARRAY2="${ARRAY[@]:1:$ARR_LEN}"
     FILE="\<${1}\>" 
