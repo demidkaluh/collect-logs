@@ -2,6 +2,29 @@
 
 function collect-logs ()
 {
+  USAGE="
+  Runs QEMU with .efi app, collects logs and checks them.
+  Usage (as root!):
+      # bash collect-logs [ARGS]
+  Arguments:
+      -f              - choose verifiable .efi file 
+      Optional :
+      --help,-h,help  - show this help
+      -c              - enable color output (0 or 1)
+      -b              - choose bios version (.../OVMF.4m.fd)
+      -m              - choose RAM size (default is 1000M)
+      -s              - choose number of cores (default is 2)
+      -d              - choose disk space (default is 200M)
+
+      Minimum required (may differ with package managers): 
+      qemu or qemu-kvm 
+      libvirt 
+      kpartx 
+      dosfstools \n"
+
+  PIPE="\n################################################\n"
+
+  
   START=$(pwd)
 
   function RED ()
@@ -13,7 +36,12 @@ function collect-logs ()
     done
     
     out="${out::-1}"
-    printf "\033[91m""$out""\033[0m"
+    if (( "$COLOR" == 1 ))
+    then
+      printf "\033[91m""$out""\033[0m"
+    else 
+      printf "$out"
+    fi
   }
   
 
@@ -26,7 +54,12 @@ function collect-logs ()
     done
     
     out="${out::-1}"
-    printf "\033[92m""$out""\033[0m"
+    if (( "$COLOR" == 1 ))
+    then
+      printf "\033[92m""$out""\033[0m"
+    else 
+      printf "$out"
+    fi
   }
 
 
@@ -40,7 +73,13 @@ function collect-logs ()
 
 
     out="${out::-1}"
-    printf "\033[93m""$out""\033[0m"
+
+    if (( "$COLOR" == 1 ))
+    then
+      printf "\033[93m""$out""\033[0m"
+    else
+      printf "$out"
+    fi
   }
   
 
@@ -57,6 +96,7 @@ function collect-logs ()
   function my_exit ()
   {
     cd "$START" 2>/dev/null 
+    sleep 1
     remove
     sudo chown -R demid:users AMDZ_UNZIPPED_LOGS 2>/dev/null
     exit "$1"
@@ -103,29 +143,8 @@ function collect-logs ()
    
   RAM_SIZE=1000M
   SMP=2
-  DISK_SIZE=100M
-
-
-  USAGE="
-  Runs QEMU with .efi app, collects logs and checks them.
-  Usage (as root!):
-      # bash collect-logs [ARGS]
-  Arguments:
-      --help,-h,help    - show this help
-      -f                - choose verifiable .efi file 
-      -b (optional)     - choose bios version
-      -m (optional)     - choose RAM size (default is 1000M)
-      -s (optional)     - choose number of cores (default is 2)
-      -d (optional)     - choose disk space (default is 100M)
-
-      Minimum required (may differ with package managers): 
-      qemu or qemu-kvm 
-      libvirt 
-      kpartx 
-      dosfstools \n"
-
-  PIPE="\n################################################\n"
-
+  DISK_SIZE=200M
+  COLOR=1
 
   #HELP PAGE
   for arg in "$@"; do
@@ -141,7 +160,7 @@ function collect-logs ()
 
   #OPTS PARSING
   
-  while getopts ":b:m:s:d:f:" opt; do
+  while getopts ":b:m:s:d:f:c:" opt; do
     case "${opt}" in
           b)
               BIOS="$OPTARG"
@@ -205,6 +224,9 @@ function collect-logs ()
                 printf "Incorrect -f option\n"
                 exit 1
               fi
+              ;;
+          c) 
+              COLOR="$OPTARG"
               ;;
           *)
               echo "Incorrect options. Try -h to see help page"
