@@ -333,7 +333,7 @@ function collect-logs ()
   #finds substring in string
   function my_find ()
   {
-    ARRAY="($@)"
+    ARRAY=($@)
     let ARR_LEN="${#ARRAY[@]}"-1
     ARRAY2="${ARRAY[@]:1:$ARR_LEN}"
     FILE="\<${1}\>" 
@@ -515,22 +515,22 @@ function collect-logs ()
   printf "$PIPE"
 
   
-  YELLOW "Totally were found : "; printf "$LOGS_LEN.\n"
-  YELLOW "Needed found : "; printf "$FOUND_LEN ""/"" $NEEDED_LEN.\n"
+  YELLOW "Totally were found : "; printf "$LOGS_LEN\n"
+  YELLOW "Needed were found : "; printf "$FOUND_LEN ""/"" $NEEDED_LEN\n"
   
   if [[ "$EMP_LEN" != 0 ]]
   then
-    printf "$EMP_LEN of them are "; YELLOW "empty.\n"
+    printf "$EMP_LEN of them are "; YELLOW "empty\n"
   fi 
 
   if [[ "$NEF_LEN" != 0 ]]
   then 
-    YELLOW "Not found : "; printf "$NEF_LEN.\n"
+    YELLOW "Not found : "; printf "$NEF_LEN\n"
   fi 
 
   if [[ "$UNEXP_LEN" != 0 ]]
   then
-    YELLOW "Unexpected : "; printf "$UNEXP_LEN.\n" 
+    YELLOW "Unexpected : "; printf "$UNEXP_LEN\n" 
   fi
 
   printf "$PIPE"
