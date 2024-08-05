@@ -293,7 +293,7 @@ function collect-logs ()
   ARCHIVE="$(ls "disk/AMDZ_HW_LOG/" | sort | grep log___ | grep .tar.gz | tail -n 1)"
   ARCHIVE_PATH="disk/AMDZ_HW_LOG/""$ARCHIVE"
 
-  if [ -z "$ARCHIVE_PATH" ]
+  if [ -z "$ARCHIVE" ]
   then 
     RED "\nArchive wasn't found\n"
     my_exit 1 
