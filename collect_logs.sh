@@ -2,6 +2,44 @@
 
 function collect-logs ()
 {
+  KNOWN_COMMANDS_SOURCES_RECORDS="mount:Debian,Ubuntu,ArchLinux,AstraLinux=mount
+  umount:Debian,Ubuntu,ArchLinux,AstraLinux=mount
+  ls:Debian,Ubuntu,ArchLinux,AstraLinux=coreutils
+  printf:Debian,Ubuntu,ArchLinux,AstraLinux=coreutils
+  dd:Debian,Ubuntu,ArchLinux,AstraLinux=coreutils
+  parted:Debian,Ubuntu,ArchLinux,AstraLinux=parted
+  mkfs.vfat:Debian,Ubuntu=fdisk;ArchLinux,AstraLinux=dosfstools
+  mv:Debian,Ubuntu=fdisk;ArchLinux,AstraLinux=coreutils
+  cp:Debian,Ubuntu,ArchLinux,AstraLinux=coreutils
+  mkdir:Debian,Ubuntu,ArchLinux,AstraLinux=coreutils
+  tar:Debian,Ubuntu,ArchLinux,AstraLinux=tar
+  find:Debian,Ubuntu,ArchLinux,AstraLinux=findutils
+  echo:Debian,Ubuntu,ArchLinux,AstraLinux=coreutils
+  sed:Debian,Ubuntu,ArchLinux,AstraLinux=sed
+  grep:Debian,Ubuntu,ArchLinux,AstraLinux=grep
+  qemu-system-x86_64:Debian,Ubuntu,AstraLinux=qemu-kvm
+  qemu-system-x86_64:ArchLinux=qemu-full
+  libvirtd:Debian,Ubuntu,AstraLinux=libvirt-daemon-system
+  libvirtd:ArchLinux=libvirt
+  "
+  
+  for RECORD in ${KNOWN_COMMANDS_SOURCES_RECORDS}; do    COMMAND=$(echo -n $RECORD | cut -d':' -f1)
+      SOURCES_FOR_DISTROS_LIST=$(echo -n $RECORD | cut -d':' -f2 | tr ';' ' ')
+
+      if ! command -v "${COMMAND}" > /dev/null; then
+          ANY_FAILED=1
+          echo "Failed to find command '${COMMAND}', make sure it is installed"
+          echo "  Hint: install"
+          for SOURCES_FOR_DISTROS in ${SOURCES_FOR_DISTROS_LIST}; do
+              DISTROS=$(echo -n $SOURCES_FOR_DISTROS | cut -d'=' -f1)
+              PACKAGE=$(echo -n $SOURCES_FOR_DISTROS | cut -d'=' -f2)
+
+              echo "    \`${PACKAGE}\`, if running ${DISTROS}"
+        done
+    fi
+  done
+
+
   USAGE="
   Runs QEMU with .efi app, collects logs and checks them.
   Usage (as root!):
@@ -14,76 +52,32 @@ function collect-logs ()
       -b              - send bios (.../OVMF.4m.fd)
       -m              - choose RAM size (default 1000M)
       -s              - choose number of cores (default 2)
-      -d              - choose disk space (default 200M)
-
-      Minimum required (may differ with package managers): 
-      qemu or qemu-kvm 
-      libvirt
-      ovmf 
-      kpartx 
-      dosfstools \n"
+      -d              - choose disk space (default 200M)\n"
 
   PIPE="\n################################################\n"
 
   
   START=$(pwd)
 
-  function RED ()
+  function my_printf ()
   {
-    out=""
-    for i in "$@"
-    do 
-      out+="$i "
-    done
-    
-    out="${out::-1}"
-    if (( "$COLOR" == 1 ))
+    if [[ "$COLOR" = 1 ]]
     then
-      printf "\033[91m""$out""\033[0m"
-    else 
-      printf "$out"
-    fi
-  }
-  
-
-  function GREEN ()
-  {
-    out=""
-    for i in "$@"
-    do 
-      out+="$i "
-    done
-    
-    out="${out::-1}"
-    if (( "$COLOR" == 1 ))
-    then
-      printf "\033[92m""$out""\033[0m"
-    else 
-      printf "$out"
-    fi
-  }
-
-
-  function YELLOW ()
-  {
-    out=""
-    for i in "$@"
-    do 
-      out+="$i "
-    done
-
-
-    out="${out::-1}"
-
-    if (( "$COLOR" == 1 ))
-    then
-      printf "\033[93m""$out""\033[0m"
+      if [[ "$1" = "RED" ]]
+      then
+        printf "\033[91m""$2""\033[0m"
+      elif [[ "$1" = "GREEN" ]]
+      then
+        printf "\033[92m""$2""\033[0m"
+      elif [[ "$1" = "YELLOW" ]]
+      then
+        printf "\033[93m""$2""\033[0m"
+      fi
     else
-      printf "$out"
+      printf "$2"
     fi
   }
   
-
   
   function remove ()
   {
@@ -99,7 +93,7 @@ function collect-logs ()
     cd "$START" 2>/dev/null 
     sleep 1
     remove
-    sudo chown -R demid:users AMDZ_UNZIPPED_LOGS 2>/dev/null
+    #sudo chown -R demid:users AMDZ_UNZIPPED_LOGS 2>/dev/null
     exit "$1"
   }        
 
@@ -107,7 +101,7 @@ function collect-logs ()
   #Secure cd
   function my_cd ()
   {
-    cd "$1" || { RED "Dir ""$1"" doesn't exist or not allowed\n"; my_exit 1; }
+    cd "$1" || { my_printf RED "Dir ""$1"" doesn't exist or not allowed\n"; my_exit 1; }
   }
 
   #Outputs all files under current directory
@@ -153,7 +147,7 @@ function collect-logs ()
           b)
               BIOS="$OPTARG"
 
-              if (( $(echo "$BIOS" | grep .4m.fd | grep OVMF | wc -l) != 1 ))
+              if (( $(echo "$BIOS" | grep OVMF | wc -l) != 1 ))
               then 
                 printf "Incorrect -b option\n"
                 exit 1
@@ -226,24 +220,21 @@ function collect-logs ()
   #Try to find bios in system if it wasn't set
   if [ -z "$BIOS" ]
   then
-    BIOS_PATH1="/usr/share/edk2/x64/OVMF.4m.fd"
-    BIOS_PATH2="/usr/share/OVMF/x64/OVMF.4m.fd"
+    BIOS_PATHS=("/usr/share/OVMF/OVMF_CODE.fd" "/usr/share/edk2/x64/OVMF.4m.fd" "/usr/share/OVMF/x64/OVMF.4m.fd")
   
-    if [ -f "$BIOS_PATH1" ]
-    then
-      BIOS="$BIOS_PATH1"
-    elif [ -f "$BIOS_PATH2" ]
-    then
-      BIOS="$BIOS_PATH2"
-    else
-      WHERE_IS_OVMF=$(whereis OVMF | sed 's/OVMF: //')
-      BIOS=$(recursive_ls "$WHERE_IS_OVMF" | grep OVMF.4m.fd)
-    fi
+    for BPATH in "${BIOS_PATHS[@]}"
+    do
+      if [[ -s "$BPATH" ]]
+      then
+        BIOS="$BPATH"
+        break
+      fi
+    done
   fi 
   
   if [ -z "$BIOS" ]
   then
-    RED "BIOS wasn't set by user and wasn't found by script.\n"
+    my_printf RED "BIOS wasn't set by user and wasn't found by script.\n"
     my_exit 1
   fi
 
@@ -274,7 +265,7 @@ function collect-logs ()
   #QEMU BOOT
   qemu-system-x86_64               \
     -bios "$BIOS"                  \
-    -drive file=disk.img,format=raw\
+    -hda "disk.img"                \
     -m "$RAM_SIZE"                 \
     -smp "$SMP"                    \
     --enable-kvm                   \
@@ -295,7 +286,7 @@ function collect-logs ()
 
   if [ -z "$ARCHIVE" ]
   then 
-    RED "\nArchive wasn't found\n"
+    my_printf RED "\nQEMU didn't create acrhive\n"
     my_exit 1 
   fi 
   
@@ -306,7 +297,7 @@ function collect-logs ()
   TEST_NAME=$(echo "$ARCHIVE" | sed 's/log___/test/' | sed 's/.tar.gz//')
   TEST_DIR="$MACHINE_DIR/""$TEST_NAME/"
   
-  mkdir "$TEST_DIR" || { RED "$TEST_NAME already exists\n"; my_exit 1; }
+  mkdir "$TEST_DIR" || { my_printf RED "$TEST_NAME already exists\n"; my_exit 1; }
   mv "$ARCHIVE_PATH" "$TEST_DIR"
 
   my_cd "$TEST_DIR"
@@ -338,7 +329,7 @@ function collect-logs ()
     ARRAY2="${ARRAY[@]:1:$ARR_LEN}"
     FILE="\<${1}\>" 
 
-    if [[ ${ARRAY2[@]} =~ $FILE ]]
+    if [[ "$ARRAY2" =~ $FILE ]]
     then
       echo 1
     else
@@ -425,11 +416,11 @@ function collect-logs ()
 
 
   #Output results
-  YELLOW "\n           LOG COLLECTION RESULTS:"
+  my_printf YELLOW "\n           LOG COLLECTION RESULTS:"
   printf "$PIPE"
-  YELLOW "Tested machine : "
+  my_printf YELLOW "Tested machine : "
   printf "$MACHINE\n"
-  YELLOW "Date : "
+  my_printf YELLOW "Date : "
   printf "$(echo "$ARCHIVE" | sed 's/log___//' | sed 's/.tar.gz//')\n"
 
   
@@ -447,7 +438,7 @@ function collect-logs ()
   
   if [ "$OK_LEN" != 0 ]
   then
-    GREEN "\nSUCCESSFUL ($OK_LEN file(s)):\n"
+    my_printf GREEN "\nSUCCESSFUL ($OK_LEN file(s)):\n"
     
     if [[ "$EFIVARS_CREATED" == 1 ]]
     then
@@ -484,7 +475,7 @@ function collect-logs ()
   
   if [ "$NEF_LEN" != 0 ]
   then
-    RED "\nNOT FOUND ($NEF_LEN file(s)):\n"
+    my_printf RED "\nNOT FOUND ($NEF_LEN file(s)):\n"
 
     for FILE in "${NOT_FOUND_FILES[@]}"
     do 
@@ -494,7 +485,7 @@ function collect-logs ()
 
   if [ "$EMP_LEN" != 0 ]
   then
-    RED "\nEMPTY ($EMP_LEN file(s)):\n"
+    my_printf RED "\nEMPTY ($EMP_LEN file(s)):\n"
 
     for FILE in "${EMPTY_FILES[@]}"
     do 
@@ -504,7 +495,7 @@ function collect-logs ()
 
   if [ "$UNEXP_LEN" != 0 ]
   then
-    RED "\nUNEXPECTED ($UNEXP_LEN file(s)):\n"
+    my_printf RED "\nUNEXPECTED ($UNEXP_LEN file(s)):\n"
 
     for FILE in "${UNEXPECTED_FILES[@]}"
     do 
@@ -515,29 +506,28 @@ function collect-logs ()
   printf "$PIPE"
 
   
-  YELLOW "Totally were found : "; printf "$LOGS_LEN\n"
-  YELLOW "Needed were found : "; printf "$FOUND_LEN ""/"" $NEEDED_LEN\n"
+  my_printf YELLOW "Totally were found : "; printf "$LOGS_LEN\n"
+  my_printf YELLOW "Needed were found : "; printf "$FOUND_LEN ""/"" $NEEDED_LEN\n"
   
   if [[ "$EMP_LEN" != 0 ]]
   then
-    printf "$EMP_LEN of them are "; YELLOW "empty\n"
+    printf "$EMP_LEN of them are "; my_printf YELLOW "empty\n"
   fi 
 
   if [[ "$NEF_LEN" != 0 ]]
   then 
-    YELLOW "Not found : "; printf "$NEF_LEN\n"
+    my_printf YELLOW "Not found : "; printf "$NEF_LEN\n"
   fi 
 
   if [[ "$UNEXP_LEN" != 0 ]]
   then
-    YELLOW "Unexpected : "; printf "$UNEXP_LEN\n" 
+    my_printf YELLOW "Unexpected : "; printf "$UNEXP_LEN\n" 
   fi
 
   printf "$PIPE"
 
 
   #UNMOUNT AND REMOVE DISK
-  printf "Program completed\n"
   my_exit 0 2>/dev/null
 }
 
